@@ -5,6 +5,7 @@ SCRIPT_DIR="${HOME}/.scripts/site-control"
 # Decoration ----------------------------------------------------------------------------
 R='\033[0;31m'
 G='\033[0;32m'
+DG='\033[2;32m'
 Y='\033[0;33m'
 B='\033[0;34m'
 M='\033[0;35m'
@@ -106,6 +107,34 @@ update_timestamp() {
     yq -i ".sites.${site}.last_${mode} = \"${timestamp}\"" "$REGISTRY"
 }
 
+create_systemd_service() {
+    local site="$1"
+    local prod_dir; prod_dir=$(yq e ".sites.${site}.paths.prod" "$REGISTRY")
+    local unit; unit="site-${site}.service"
+
+    cat > "/tmp/${unit}" <<EOF
+[Unit]
+Description=${site^} Log Service
+After=network.target
+
+[Service]
+Type=simple
+User=kh
+Group=kh
+WorkingDirectory=${prod_dir}
+ExecStart=${prod_dir}/${site}-backend
+Restart=always
+RestartSec=5
+Environment=ENVIRONMENT=production
+EnvironmentFile=${HOME}/sites/.prod/.env
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    sudo cp "/tmp/${unit}" "/etc/systemd/system/${unit}"
+    OK "Created systemd service file: ${G}/etc/systemd/system/${unit}${NC}"
+}
+
 # YAML ----------------------------------------------------------------------------------
 get_and_incr_site_count() {
     local site_count=$((1 + $(yq e '.global.site_count' "$REGISTRY")))
@@ -159,6 +188,7 @@ register() {
         .paths.frontend = \"${rootdir}/app\" |
         .paths.backend = \"${rootdir}/backend\" |
         .paths.config = \"${rootdir}/cfg.yaml\" |
+        .paths.prod = \"${HOME}/sites/.prod/${site}\" |
         .last_up = null |
         .last_dev = null |
         .session_name = \"dev-${site}\"
@@ -230,7 +260,7 @@ dev() {
     local fport; fport=$(yq e ".sites.${site}.ports.frontend" "$REGISTRY")
     local session; session=$(yq e ".sites.${site}.session_name" "$REGISTRY")
 
-    local cmd; cmd="${2:-run}" # "run" or "stop" internal-only args
+    local cmd; cmd="${2:-run}" # internal-only "run/stop"
     if [[ "$cmd" == "stop" ]]; then
         echo -e "Stopping '${G}$session${NC}'...";
 
@@ -251,7 +281,6 @@ dev() {
             if ! tmux new-session -d -s "$session" \
                 -e "ENVIRONMENT=development" \
                 -e "ALLOWED_ORIGIN=http://localhost:$fport" 2>/dev/null; then
-                # -e "ALLOWED_ORIGIN=http://10.0.0.8:$fport" 2>/dev/null; then
                 ERR "Failed to start tmux session."
                 exit 1
             fi
@@ -270,29 +299,120 @@ dev() {
             exit 1
         fi
         OK "Frontend service started"
-
-        # update last_dev
         update_timestamp "$site" "dev"
-        
+
         # TODO: details, localhost url, how to attach to tmux session, etc.
     fi
 }
 
 up() {
-    TODO "up"
-    get_version_info "$PWD"
+        local site="$1"
+        local root_dir; root_dir=$(yq e ".sites.${site}.paths.root" "$REGISTRY")
+        local prod_dir; prod_dir=$(yq e ".sites.${site}.paths.prod" "$REGISTRY")
+        local prod_service; prod_service="site-${site}.service"
+        local repo; repo=$(git -C "$root_dir" remote get-url origin)
+
+        mkdir -p "$prod_dir"
+        if [ -d "$prod_dir"/.git ]; then
+            git -C "$prod_dir" fetch --all --tags
+            git -C "$prod_dir" reset --hard origin/main
+            git -C "$prod_dir" clean -fd
+        else
+            git clone "$repo" "$prod_dir"
+            git -C "$prod_dir" switch main
+        fi
+
+		cp "$root_dir/cfg.yaml" "$prod_dir/cfg.yaml"
+
+		if [ ! -f "$prod_dir/.env" ]; then
+			local msg="No .env found in production. Create "
+			msg+="${B}$prod_dir/.env${NC} before deployment."
+			ERR "${msg}"
+			return 1
+		fi
+
+		(cd "$prod_dir/backend" && go build -o ../"${site}"-backend) || {
+            ERR "backend build failed"
+            return 1
+        }
+        OK "Backend built successfully"
+        (cd "$prod_dir/app" && npm ci && npm run build) || {
+            ERR "frontend build failed"
+            return 1
+        }
+        OK "Frontend built successfully"
+
+        create_systemd_service "$site"
+        sudo systemctl daemon-reload
+        # if service isn't enabled, enable it
+        if ! sudo systemctl is-enabled "$prod_service" 2>/dev/null; then
+            sudo systemctl enable "$prod_service" 2>/dev/null
+        fi
+        sudo systemctl restart "$prod_service"
+
+		if sudo systemctl restart "$prod_service"; then
+			update_timestamp "$site" "up"
+			OK "Production site started successfully"
+		else
+			local msg="Service failed to start - check "
+			msg+="${B}journalctl -exu $prod_service${NC}"
+			ERR "$msg"
+			return 1
+		fi
 }
 
 down() {
-    TODO "down"
+  local site="$1"
+  local prod_service; prod_service="site-${site}.service"
+  if sudo systemctl is-enabled "$prod_service" 2>/dev/null; then
+    if sudo systemctl is-active "$prod_service" 2>/dev/null; then
+      if sudo systemctl stop "$prod_service" 2>/dev/null; then
+        OK "${G}$prod_service${NC} stopped successfully"
+      else
+        WARN "${G}$prod_service${NC} not stopped"
+        return 1
+      fi
+    else
+      WARN "${G}$prod_service${NC} not active"
+      return 1
+    fi
+  else
+    WARN "${G}$prod_service${NC} not enabled"
+    return 1
+  fi
+} 
+
+# stats ---------------------------------------------------------------------------------
+stats_prod_short() {
+  local site="$1"
+  local prod; prod=$(yq e ".sites.${site}.paths.prod" "$REGISTRY")
+  local svc="site-${site}.service"
+  local active; active=$(sudo systemctl is-active "$svc" 2>/dev/null || true)
+  local head; head=$(git -C "$prod" rev-parse --short HEAD 2>/dev/null || echo "n/a")
+  local remote
+  remote=$(git -C "$prod" rev-parse --short origin/main 2>/dev/null || echo "n/a")
+  local dev; dev=$(yq e ".sites.${site}.last_dev" "$REGISTRY")
+  local up; up=$(yq e ".sites.${site}.last_up" "$REGISTRY")
+  echo -e "Prod: ${G}$active${NC} | commit: $head (remote: $remote)"
+  echo -e "Dev: $dev | Up: $up"
 }
 
 stats() {
-    echo -e "Ordered names:\n  $(get_all_site_names)"
-    echo "One-per-line:"
-    for site in $CFG_KEYS; do
-        echo "$site"
-    done
+    local site="${1:-all}"
+
+    if [ "$site" == "all" ]; then
+        for each in $CFG_KEYS; do
+            local title; title="[ ${DG}$each${NC} ]"
+            echo -e "\n$title"
+            stats_prod_short "$each"
+        done
+        echo ""
+    else
+        local title; title="[ ${DG}$site${NC} ]"
+        echo -e "\n$title"
+        stats_prod_short "$site"
+        echo ""
+    fi
 }
 
 logs() {

@@ -21,6 +21,7 @@ sites:
       frontend: /home/kh/sites/fuel/app
       backend: /home/kh/sites/fuel/backend
       config: /home/kh/sites/fuel/cfg.yaml
+      prod: /home/kh/sites/.prod/fuel
     last_up: 20Aug2025 13:30:38
     last_dev: 30Aug2025 18:31:11
     session_name: dev-fuel
@@ -42,8 +43,9 @@ sites:
       frontend: /home/kh/sites/pay/app
       backend: /home/kh/sites/pay/backend
       config: /home/kh/sites/pay/cfg.yaml
-    last_up: null
-    last_dev: 21Sep2025 12:15:47
+      prod: /home/kh/sites/.prod/pay
+    last_up: 19May2026 08:01:06
+    last_dev: 18May2026 18:09:01
     session_name: dev-pay
     dev_version: v0.0.1
     prod_version: v0.0.1
