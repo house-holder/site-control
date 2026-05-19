@@ -121,12 +121,12 @@ After=network.target
 Type=simple
 User=kh
 Group=kh
-WorkingDirectory=${prod_dir}
+WorkingDirectory=${prod_dir}/backend
 ExecStart=${prod_dir}/${site}-backend
 Restart=always
 RestartSec=5
 Environment=ENVIRONMENT=production
-EnvironmentFile=${HOME}/sites/.prod/.env
+EnvironmentFile=${HOME}/sites/.prod/${site}/backend/.env
 
 [Install]
 WantedBy=multi-user.target
