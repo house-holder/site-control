@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-SCRIPT_DIR="${HOME}/.scripts/site-control"
+SCRIPT_DIR="${HOME}/.scripts/site-control/"
 
 # Decoration ----------------------------------------------------------------------------
 R='\033[0;31m'
@@ -22,10 +22,8 @@ DEBUG() { echo -e "${C}DEBUG: ${B}$1${NC}" >&2; }
 
 # Initialization -------------------------------------------------------------------------
 script_init() {
-    if [ -f "$REGISTRY" ]; then
-        return 0;
-    fi
     REGISTRY="${SCRIPT_DIR}/registry.yaml"
+
     if [[ ! -f "$REGISTRY" ]]; then
         ERR "Registry file missing from '${G}$REGISTRY${NC}'"
         echo "Unable to obtain global values."
@@ -119,8 +117,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=kh
-Group=kh
+User=${USER}
+Group=${USER}
 WorkingDirectory=${prod_dir}/backend
 ExecStart=${prod_dir}/${site}-backend
 Restart=always
@@ -324,9 +322,9 @@ up() {
 
 		cp "$root_dir/cfg.yaml" "$prod_dir/cfg.yaml"
 
-		if [ ! -f "$prod_dir/.env" ]; then
+		if [ ! -f "$prod_dir/backend/.env" ]; then
 			local msg="No .env found in production. Create "
-			msg+="${B}$prod_dir/.env${NC} before deployment."
+			msg+="${B}$prod_dir/backend/.env${NC} before deployment."
 			ERR "${msg}"
 			return 1
 		fi

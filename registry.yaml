@@ -1,7 +1,7 @@
 global:
   site_count: 2
-  systemd_user: kh
-  root_domain: khouse.dev
+  systemd_user: kyle
+  root_domain: kyleouse.dev
   ports:
     backend: 5000
     frontend: 5010
@@ -17,12 +17,12 @@ sites:
       frontend: 5011
       production: 6001
     paths:
-      root: /home/kh/sites/fuel
-      frontend: /home/kh/sites/fuel/app
-      backend: /home/kh/sites/fuel/backend
-      config: /home/kh/sites/fuel/cfg.yaml
-      prod: /home/kh/sites/.prod/fuel
-    last_up: 19May2026 16:12:04
+      root: /home/kyle/sites/fuel
+      frontend: /home/kyle/sites/fuel/app
+      backend: /home/kyle/sites/fuel/backend
+      config: /home/kyle/sites/fuel/cfg.yaml
+      prod: /home/kyle/sites/.prod/fuel
+    last_up: 20May2026 14:09:26
     last_dev: 19May2026 15:17:45
     session_name: dev-fuel
     dev_version: v0.2.0
@@ -39,12 +39,12 @@ sites:
       frontend: 5012
       production: 6002
     paths:
-      root: /home/kh/sites/pay
-      frontend: /home/kh/sites/pay/app
-      backend: /home/kh/sites/pay/backend
-      config: /home/kh/sites/pay/cfg.yaml
-      prod: /home/kh/sites/.prod/pay
-    last_up: 19May2026 16:12:01
+      root: /home/kyle/sites/pay
+      frontend: /home/kyle/sites/pay/app
+      backend: /home/kyle/sites/pay/backend
+      config: /home/kyle/sites/pay/cfg.yaml
+      prod: /home/kyle/sites/.prod/pay
+    last_up: 20May2026 15:11:41
     last_dev: 18May2026 18:09:01
     session_name: dev-pay
     dev_version: v0.0.1
